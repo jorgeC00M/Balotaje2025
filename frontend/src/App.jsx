@@ -1,12 +1,14 @@
-import Graficos from './components/Graficos';
+import { Outlet } from 'react-router-dom'
+import Navbar from './components/Layout/Navbar'
+import Container from './components/Layout/Container'
 
-function App() {
+export default function App() {
   return (
-    <div>
-      <h1>Balotaje 2025</h1>
-      <Graficos />
-    </div>
-  );
+    <>
+      <Navbar />
+      <Container>
+        <Outlet />
+      </Container>
+    </>
+  )
 }
-
-export default App;
