@@ -1,9 +1,17 @@
 import { createBrowserRouter } from 'react-router-dom'
 import App from '../App'
+
+// Estas dos páginas sí me confirmaste que existen:
 import Home from '../pages/Home'
-import Encuesta from '../pages/Encuesta'
-import Importar from '../pages/Importar'
-import Analitica from '../pages/Analitica'
+import ImportarRespuestas from '../pages/ImportarRespuestas'
+
+// Placeholders temporales por si no existen aún:
+function Encuesta() {
+  return <div style={{padding:24}}>Encuesta (placeholder)</div>
+}
+function Analitica() {
+  return <div style={{padding:24}}>Analítica (placeholder)</div>
+}
 
 const router = createBrowserRouter([
   {
@@ -11,11 +19,12 @@ const router = createBrowserRouter([
     element: <App />,
     children: [
       { index: true, element: <Home /> },
-      { path: 'encuesta', element: <Encuesta /> },
-      { path: 'importar', element: <Importar /> },
-      { path: 'analitica', element: <Analitica /> },
+      { path: 'encuesta', element: <Encuesta /> },             // <- placeholder
+      { path: 'importar', element: <ImportarRespuestas /> },
+      { path: 'analitica', element: <Analitica /> },           // <- placeholder
     ],
   },
 ])
 
 export default router
+
