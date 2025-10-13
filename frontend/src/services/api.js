@@ -1,4 +1,4 @@
-import axios from 'axios'
+/*import axios from 'axios'
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE,
@@ -24,4 +24,28 @@ export const postRespuesta = async (payload) => {
   return data
 }
 
-export default api
+export default api*/
+import axios from 'axios'
+
+const API = axios.create({
+  baseURL: '/api', // <-- SIN http://localhost:8000
+})
+
+export async function uploadFile(file) {
+  const fd = new FormData()
+  fd.append('file', file)
+  const { data } = await API.post('/import', fd, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+  return data
+}
+
+export async function appendSurveyRow(payload) {
+  const { data } = await API.post('/survey/append', payload)
+  return data
+}
+
+export async function getSummary() {
+  const { data } = await API.get('/summary')
+  return data
+}
