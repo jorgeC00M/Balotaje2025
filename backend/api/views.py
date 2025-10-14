@@ -4,6 +4,8 @@ import pandas as pd
 from django.http import JsonResponse, HttpResponseBadRequest
 from django.views.decorators.csrf import csrf_exempt
 from django.conf import settings
+import traceback  # Agregar al inicio
+import numpy as np
 
 FILENAME = "Encuesta_google.xlsx"
 FILEPATH = settings.DATA_DIR / FILENAME
@@ -32,9 +34,6 @@ def _save_df(df: pd.DataFrame):
 def import_excel(request):
     """
     POST multipart/form-data con 'file' (.xlsx o .csv)
-    - Si es .xlsx: se guarda tal cual como Encuesta_google.xlsx
-    - Si es .csv: se convierte a .xlsx y se guarda
-    Reemplaza el archivo actual.
     """
     if request.method != "POST":
         return HttpResponseBadRequest("Solo POST")
@@ -44,23 +43,44 @@ def import_excel(request):
         return HttpResponseBadRequest("Falta 'file'")
 
     name = f.name.lower()
+    
     try:
+        # Verificar que el directorio existe
+        if not FILEPATH.parent.exists():
+            FILEPATH.parent.mkdir(parents=True, exist_ok=True)
+            
         if name.endswith(".xlsx"):
+            # Guardar temporalmente
             with open(FILEPATH, "wb+") as dest:
                 for chunk in f.chunks():
                     dest.write(chunk)
-            df = pd.read_excel(FILEPATH)
+            # Intentar leer
+            df = pd.read_excel(FILEPATH, engine='openpyxl')
+            
         elif name.endswith(".csv"):
             df = pd.read_csv(f)
-            # normaliza columnas a tus nombres estándar si quieres
-            df.to_excel(FILEPATH, index=False)
+            df.to_excel(FILEPATH, index=False, engine='openpyxl')
+            
         else:
             return HttpResponseBadRequest("Formato no soportado (usa .xlsx o .csv)")
 
         total = len(df)
-        return JsonResponse({"message": "ok", "total": total, "path": str(FILEPATH)})
+        columnas = list(df.columns)
+        
+        return JsonResponse({
+            "message": "ok", 
+            "total": total, 
+            "columnas": columnas,  # 👈 Útil para debug
+            "path": str(FILEPATH)
+        })
+        
     except Exception as e:
-        return HttpResponseBadRequest(f"Error al importar: {e}")
+        # Imprimir el error completo en la consola del servidor
+        traceback.print_exc()
+        return JsonResponse({
+            "error": f"Error al importar: {str(e)}",
+            "tipo": type(e).__name__
+        }, status=500)
 
 @csrf_exempt
 def append_response(request):
@@ -115,23 +135,60 @@ def append_response(request):
 
 def summary(request):
     """
-    Devuelve conteos para gráficos (edad/genero/departamento).
+    GET /api/summary
+    Devuelve estadísticas completas para gráficos
     """
     if request.method != "GET":
         return HttpResponseBadRequest("Solo GET")
+    
     try:
         df = _load_df()
+        
+        if df.empty:
+            return JsonResponse({
+                "error": "No hay datos. Sube un archivo Excel primero.",
+                "total": 0
+            })
+        
         def counts(col):
+            """Convierte una columna en datos para gráficos"""
             if col not in df.columns:
                 return {"labels": [], "values": []}
-            vc = df[col].fillna("N/D").value_counts()
-            return {"labels": list(vc.index), "values": list(vc.values)}
-
+            
+            vc = df[col].fillna("Sin respuesta").value_counts()
+            
+            # 👇 CLAVE: Convertir a tipos Python nativos
+            return {
+                "labels": [str(label) for label in vc.index],
+                "values": [int(value) for value in vc.values]  # 👈 int() convierte int64 a int
+            }
+        
+        # Detectar columnas automáticamente
+        all_columns = list(df.columns)
+        
+        # Construir respuesta dinámica
+        result = {
+            "total": int(len(df)),  # 👈 También convertir el total
+            "columnas_disponibles": all_columns,
+        }
+        
+        # Agregar conteos para todas las columnas tipo texto/categoría
+        for col in df.columns:
+            # Solo procesar columnas con <= 20 valores únicos (categóricas)
+            nunique = df[col].nunique()
+            if nunique <= 20 and nunique > 0:
+                result[col] = counts(col)
+        
+        return JsonResponse(result)
+        
+    except FileNotFoundError:
         return JsonResponse({
-            "total": len(df),
-            "edad": counts("edad"),
-            "genero": counts("genero"),
-            "departamento": counts("departamento"),
-        })
+            "error": "No se encontró el archivo de datos. Sube un Excel primero.",
+            "total": 0
+        }, status=404)
     except Exception as e:
-        return HttpResponseBadRequest(f"Error summary: {e}")
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({
+            "error": f"Error al procesar datos: {str(e)}"
+        }, status=500)
